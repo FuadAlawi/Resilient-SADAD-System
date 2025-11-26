@@ -414,45 +414,403 @@ steps:
 
 ## اتقن (Master) — Resilient Architecture & Critical Services
 
-- **Service overview**
-  - Payment API (Spring Boot), idempotent processing pipeline, async ledger writer, settlement connector, observability sidecar.
-  - Kubernetes with HPA, PDB, anti-affinity, topology spread; Prometheus Operator ServiceMonitor & PrometheusRule for SLOs.
-  - Chaos Monkey profile for in-app faults; external chaos scenarios.
-  - Terraform for reproducible infra (expand with EKS/VPC modules).
+### System Architecture Overview
 
-- **Architecture (Mermaid)**
-```mermaid
-flowchart LR
-  subgraph Region A
-    subgraph AZ1
-      A1[Payment Pod]:::app --> RDS1[(Ledger/DB)]
-    end
-    subgraph AZ2
-      A2[Payment Pod]:::app --> RDS2[(Ledger/DB)]
-    end
-  end
-  subgraph Region B (DR)
-    B1[Payment Pod (warm)]:::app --> RDSB[(Replica/Backup)]
-  end
-  Client-->LB[Ingress/Service]
-  LB-->A1
-  LB-->A2
-  Prom[Prometheus]-.->A1
-  Prom-.->A2
-  classDef app fill:#e6f7ff,stroke:#007acc
+The SADAD resilient payment network is built on a cloud-native architecture leveraging AWS managed services and Kubernetes for container orchestration. The design prioritizes:
+
+1. **Horizontal scalability**: Add capacity by deploying more pods, not bigger instances
+2. **Geographic distribution**: Multi-AZ within region + cross-region DR
+3. **Automated recovery**: Self-healing infrastructure with minimal human intervention
+4. **Observability**: Comprehensive metrics, logs, and traces for rapid troubleshooting
+
+### Application Layer
+
+#### Payment Processing Service (Spring Boot)
+
+The core payment service is a stateless REST API built with Spring Boot 3.3.5 and Java 17:
+
+**Key Features**:
+- **Idempotent Processing**: Prevents duplicate charges during retries
+- **Circuit Breakers**: Resilience4j library provides automatic circuit breaking
+- **Rate Limiting**: Bucket4j for token bucket algorithm implementation
+- **Health Checks**: Actuator endpoints for Kubernetes readiness/liveness probes
+- **Metrics Export**: Micrometer exports metrics in Prometheus format
+
+**Configuration** (`src/main/resources/ application.yml`):
+```yaml
+spring:
+  application:
+    name: resilient-sadad-network
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus,metrics
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+  health:
+    livenessState:
+      enabled: true
+    readinessState:
+      enabled: true
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      paymentProcessing:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        permittedNumberOfCallsInHalfOpenState: 3
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
 ```
 
-- **Patterns**
-  - Idempotency keys; outbox pattern for reliable ledger writes.
-  - Circuit breakers + retries with jitter.
-  - Blue/green or canary deployments.
-  - Secrets from KMS; short-lived credentials.
-  - Backups with point-in-time recovery; restore drills.
+**Chaos Monkey Integration** (`application-chaos.yml`):
+```yaml
+spring:
+  profiles: chaos
 
-- **Kubernetes configs**
-  - `kubernetes/deployment-tier1.yaml`: readiness/liveness, resource requests/limits, anti-affinity, topology spreads, PDB.
-  - `kubernetes/service-monitor.yaml`: metrics scrape + `Service`.
-  - `kubernetes/prometheus-rules.yaml`: SLO alerts for availability, latency p95, error rate, saturation.
+chaos:
+  monkey:
+    enabled: true
+    assaults:
+      level: 5
+      latencyActive: true
+      latencyRangeStart: 500
+      latencyRangeEnd: 2000
+      exceptionsActive: true
+      killApplicationActive: false  # Too disruptive for production
+```
+
+#### Ledger Writer Service
+
+Asynchronous service for writing payment records to the database:
+- Uses Spring's `@Async` for non-blocking writes
+- Implements outbox pattern for reliable message delivery
+- Guarantees at-least-once delivery semantics
+- Supports replay from transaction log if data corrupted
+
+#### Settlement Connector
+
+Integrates with SARIE (Saudi RTGS) and bank APIs:
+- Maintains persistent connections with retry logic
+- Queues settlement requests during network outages
+- Reconciles settlements daily with automated reports
+
+### Infrastructure Layer (AWS + Terraform)
+
+#### VPC and Networking
+
+Our Terraform configuration provisions a production-grade network:</n
+**VPC Configuration** (`terraform/main.tf`):
+```hcl
+module "vpc" {
+  source  = "terraform-aws-modules/vpc/aws"
+  version = "5.1.2"
+
+  name = "${var.cluster_name}-vpc"
+  cidr = var.vpc_cidr  # 10.0.0.0/16
+
+  azs             = slice(data.aws_availability_zones.available.names, 0, 3)
+  private_subnets = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
+  public_subnets  = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
+
+  enable_nat_gateway     = true
+  single_nat_gateway     = false  # High availability
+  one_nat_gateway_per_az = true   # Resilience against AZ failure
+
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+
+  public_subnet_tags = {
+    "kubernetes.io/role/elb" = 1
+  }
+
+  private_subnet_tags = {
+    "kubernetes.io/role/internal-elb" = 1
+  }
+}
+```
+
+**Resilience Design Rationale**:
+- **3 Availability Zones**: Survives loss of any single AZ
+- **Separate NAT per AZ**: Outbound connectivity maintained even if one AZ fails
+- **Public + Private Subnets**: Security best practice (apps in private, load balancers in public)
+
+#### EKS Cluster
+
+**Cluster Configuration**:
+```hcl
+module "eks" {
+  source  = "terraform-aws-modules/eks/aws"
+  version = "19.16.0"
+
+  cluster_name    = var.cluster_name
+  cluster_version = "1.27"
+
+  vpc_id     = module.vpc.vpc_id
+  subnet_ids = module.vpc.private_subnets
+
+  cluster_endpoint_public_access = true
+
+  eks_managed_node_groups = {
+    general = {
+      min_size     = 3   # Minimum for multi-AZ
+      max_size     = 6   # Auto-scaling headroom
+      desired_size = 3
+
+      instance_types = ["t3.medium"]
+      capacity_type  = "ON_DEMAND"  # Reliability > cost savings
+      
+      # Nodes spread across 3 AZs automatically
+    }
+  }
+}
+```
+
+**Node Group Resilience**:
+- **Minimum 3 nodes**: One per AZ ensures pod can always be scheduled
+- **ON_DEMAND instances**: Avoid spot interruptions for critical payment workloads
+- **Auto Scaling**: Cluster Autoscaler adjusts node count based on pending pods
+
+### Kubernetes Layer
+
+#### Deployment Configuration
+
+**Multi-AZ Pod Distribution** (`kubernetes/deployment-tier1.yaml`):
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-tier1
+  labels:
+    app: resilient-sadad-network
+spec:
+  replicas: 6  # 2 per AZ recommended
+  selector:
+    matchLabels:
+      app: resilient-sadad-network
+  template:
+    metadata:
+      labels:
+        app: resilient-sadad-network
+    spec:
+      # Spread pods across zones
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          when Unsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: resilient-sadad-network
+        # Also spread across nodes
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: resilient-sadad-network
+      
+      # Anti-affinity ensures pods don't co-locate
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app: resilient-sadad-network
+      
+      containers:
+        - name: app
+          image: ghcr.io/your-org/resilient-sadad-network:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          
+          # Resource limits prevent noisy neighbor issues
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "512Mi"
+          
+          # Health checks for automated recovery
+          readinessProbe:
+            httpGet:
+              path: /api/v1/healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          
+          livenessProbe:
+            httpGet:
+              path: /api/v1/healthz
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 20
+```
+
+**Design Rationale**:
+- **topologySpreadConstraints**: Ensures even distribution across AZs and nodes
+- **podAntiAffinity**: Prevents multiple replicas on same node (single node failure tolerance)
+- **Resource requests/limits**: Guarantees minimum resources, prevents resource exhaustion
+- **Readiness probe**: Traffic only routed to ready pods
+- **Liveness probe**: Kubernetes restarts unhealthy pods automatically
+
+#### Pod Disruption Budget
+
+**Preventing Downtime During Updates** (`kubernetes/deployment-tier1.yaml`):
+```yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: payment-pdb
+spec:
+  minAvailable: 3  # Always keep 3 pods running (one per AZ)
+  selector:
+    matchLabels:
+      app: resilient-sadad-network
+```
+
+**Effect**: During rolling updates or node drains, Kubernetes ensures at least 3 pods remain available, preventing total service outage.
+
+#### Horizontal Pod Autoscaler
+
+**Dynamic Scaling Based on Load** (`kubernetes/hpa.yaml`):
+```yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: payment-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: payment-tier1
+  minReplicas: 6   # Baseline: 2 per AZ
+  maxReplicas: 12  # Peak: 4 per AZ
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+```
+
+**Scaling Behavior**:
+- Normal load: 6 pods (2 per AZ)
+- Peak load (Eid, Ramadan): Scales up to 12 pods
+- Scaling trigger: CPU utilization > 70% for 30 seconds
+- Scale-down delay: 5 minutes to avoid flapping
+
+### Observability and SLOs
+
+#### Prometheus Monitoring
+
+**ServiceMonitor for Metrics Collection** (`kubernetes/service-monitor.yaml`):
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: payment-metrics
+  labels:
+    app: resilient-sadad-network
+spec:
+  selector:
+    matchLabels:
+      app: resilient-sadad-network
+  endpoints:
+    - port: http
+      path: /actuator/prometheus
+      interval: 15s  # Scrape every 15 seconds
+```
+
+**PrometheusRule for SLO Alerts** (`kubernetes/prometheus-rules.yaml`):
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: payment-slo-alerts
+spec:
+  groups:
+    - name: slo-alerts
+      interval: 30s
+      rules:
+        # Availability SLO: 99.9% uptime
+        - alert: HighErrorRate
+          expr: |
+            (
+              sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+              /
+              sum(rate(http_server_requests_seconds_count[5m]))
+            ) > 0.001
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Error rate above SLO threshold"
+            description: "Error rate is {{ $value | humanizePercentage }}"
+        
+        # Latency SLO: p95 < 500ms
+        - alert: HighLatency
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(http_server_requests_seconds_bucket[5m])) by (le)
+            ) > 0.5
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "p95 latency above SLO threshold"
+            description: "p95 latency is {{ $value }}s"
+        
+        # Saturation: CPU/Memory
+        - alert: HighCPUUsage
+          expr: |
+            avg(
+              rate(container_cpu_usage_seconds_total{pod=~"payment-.*"}[5m])
+            ) > 0.8
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High CPU usage detected"
+            description: "Average CPU usage is {{ $value | humanizePercentage }}"
+```
+
+**SLO Targets**:
+| Metric | Target | Measurement Window |
+|--------|--------| -------------------|
+| Availability | 99.9% | 30-day rolling |
+| Latency (p95) | < 500ms | 5-minute window |
+| Error Rate | < 0.1% | 5-minute window |
+| CPU Saturation | < 80% | 10-minute average |
+
+### Data Persistence and Backup
+
+#### Database (RDS PostgreSQL)
+
+- **Multi-AZ Deployment**: Automatic failover to standby in different AZ
+- **Automated Backups**: Daily snapshots with 7-day retention
+- **Point-In-Time Recovery**: Restore to any second within backup window
+- **Read Replicas**: Offload analytics queries from primary
+
+#### Backup Strategy
+
+| Data Type | Backup Method | Frequency | Retention | RPO |
+|-----------|---------------|-----------|-----------|-----|
+| Transaction Ledger | RDS Automated Backup | Daily | 7 days | 1 minute |
+| Configuration | Git + S3 Versioning | On commit | Indefinite | 0 (immutable) |
+| Application Logs | CloudWatch Logs | Real-time | 90 days | 0 |
+| Metrics | Prometheus TSDB | 15s scrape | 15 days | 15 seconds |
 
 ---
 
