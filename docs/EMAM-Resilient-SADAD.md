@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-This report presents a comprehensive resilient system design for Saudi Arabia's SADAD payment network, implementing the EMAM framework (افهم، مارس، اتقن، ميز). The design addresses critical national infrastructure requirements through multi-layered resilience combining preventive security, fault tolerance, rapid recovery, and continuous operation under adverse conditions.
+This report presents a comprehensive resilient system design for Saudi Arabia's SADAD payment network, implementing the EMAM framework (Understand, Practice, Master, Excellence). The design addresses critical national infrastructure requirements through multi-layered resilience combining preventive security, fault tolerance, rapid recovery, and continuous operation under adverse conditions.
 
 The SADAD network processes millions of daily transactions for utilities, government services, and e-commerce, making it a cornerstone of Saudi Arabia's digital economy and Vision 2030 objectives. Any disruption directly impacts citizens' ability to fulfill financial obligations and access essential services.
 
@@ -21,7 +21,7 @@ The SADAD network processes millions of daily transactions for utilities, govern
 - Kubernetes-orchestrated services with horizontal auto-scaling
 - Prometheus-based observability with SLO-driven alerting
 
-This design is grounded in Islamic principles of الأمانة (Amanah - stewardship), العدل (Adl - fairness), and لا ضرر ولا ضرار (No harm).
+This design is grounded in Islamic principles of Amanah - stewardship), Adl - fairness), and No harm).
 
 ---
 
@@ -75,17 +75,17 @@ A resilient system recovers from a compromise in minutes using Infrastructure as
 
 ### Islamic Principles in Resilient Design
 
-**الأمانة (Amanah - Trust and Stewardship)**:
+**Amanah - Trust and Stewardship)**:
 - Citizens entrust their financial data and critical transactions to SADAD
 - Operators have a sacred duty to protect this trust through reliable service
 - Implementation: End-to-end encryption, audit trails, transparent incident reporting
 
-**العدل (Adl - Justice and Fairness)**:
+**Adl - Justice and Fairness)**:
 - All citizens deserve equal access to payment services regardless of geography
 - No group should be disproportionately affected by outages
 - Implementation: Multi-region deployment ensures service continuity if one region fails
 
-**لا ضرر ولا ضرار (No Harm)**:
+**No harm ولا ضرار (No Harm)**:
 - Minimize societal harm through rapid containment and recovery
 - Clear communication during incidents to prevent panic or financial hardship
 - Implementation: Automated failover, pre-approved runbooks, public status page
@@ -397,7 +397,7 @@ steps:
     action: destroy-node-disks
     parameters:
       node: worker-node-3
-      dry_run: true  # Safety: don't actually wipe in prod
+      dry_run: true
   - description: Verify pod evacuation
     action: verify-pod-migration
     parameters:
@@ -482,7 +482,7 @@ chaos:
       latencyRangeStart: 500
       latencyRangeEnd: 2000
       exceptionsActive: true
-      killApplicationActive: false  # Too disruptive for production
+      killApplicationActive: false
 ```
 
 #### Ledger Writer Service
@@ -512,15 +512,15 @@ module "vpc" {
   version = "5.1.2"
 
   name = "${var.cluster_name}-vpc"
-  cidr = var.vpc_cidr  # 10.0.0.0/16
+  cidr = var.vpc_cidr
 
   azs             = slice(data.aws_availability_zones.available.names, 0, 3)
   private_subnets = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
   public_subnets  = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
 
   enable_nat_gateway     = true
-  single_nat_gateway     = false  # High availability
-  one_nat_gateway_per_az = true   # Resilience against AZ failure
+  single_nat_gateway     = false
+  one_nat_gateway_per_az = true 
 
   enable_dns_hostnames = true
   enable_dns_support   = true
@@ -558,14 +558,14 @@ module "eks" {
 
   eks_managed_node_groups = {
     general = {
-      min_size     = 3   # Minimum for multi-AZ
-      max_size     = 6   # Auto-scaling headroom
+      min_size     = 3 
+      max_size     = 6 
       desired_size = 3
 
       instance_types = ["t3.medium"]
-      capacity_type  = "ON_DEMAND"  # Reliability > cost savings
+      capacity_type  = "ON_DEMAND"
       
-      # Nodes spread across 3 AZs automatically
+    
     }
   }
 }
@@ -589,7 +589,7 @@ metadata:
   labels:
     app: resilient-sadad-network
 spec:
-  replicas: 6  # 2 per AZ recommended
+  replicas: 6
   selector:
     matchLabels:
       app: resilient-sadad-network
@@ -598,7 +598,7 @@ spec:
       labels:
         app: resilient-sadad-network
     spec:
-      # Spread pods across zones
+    
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: topology.kubernetes.io/zone
@@ -606,7 +606,7 @@ spec:
           labelSelector:
             matchLabels:
               app: resilient-sadad-network
-        # Also spread across nodes
+      
         - maxSkew: 1
           topologyKey: kubernetes.io/hostname
           whenUnsatisfiable: ScheduleAnyway
@@ -614,7 +614,7 @@ spec:
             matchLabels:
               app: resilient-sadad-network
       
-      # Anti-affinity ensures pods don't co-locate
+    
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
@@ -632,7 +632,7 @@ spec:
           ports:
             - containerPort: 8080
           
-          # Resource limits prevent noisy neighbor issues
+        
           resources:
             requests:
               cpu: "250m"
@@ -641,7 +641,7 @@ spec:
               cpu: "1"
               memory: "512Mi"
           
-          # Health checks for automated recovery
+        
           readinessProbe:
             httpGet:
               path: /api/v1/healthz
@@ -673,7 +673,7 @@ kind: PodDisruptionBudget
 metadata:
   name: payment-pdb
 spec:
-  minAvailable: 3  # Always keep 3 pods running (one per AZ)
+  minAvailable: 3
   selector:
     matchLabels:
       app: resilient-sadad-network
@@ -694,8 +694,8 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: payment-tier1
-  minReplicas: 6   # Baseline: 2 per AZ
-  maxReplicas: 12  # Peak: 4 per AZ
+  minReplicas: 6 
+  maxReplicas: 12
   metrics:
     - type: Resource
       resource:
@@ -730,7 +730,7 @@ spec:
   endpoints:
     - port: http
       path: /actuator/prometheus
-      interval: 15s  # Scrape every 15 seconds
+      interval: 15s
 ```
 
 **PrometheusRule for SLO Alerts** (`kubernetes/prometheus-rules.yaml`):
@@ -744,7 +744,7 @@ spec:
     - name: slo-alerts
       interval: 30s
       rules:
-        # Availability SLO: 99.9% uptime
+      
         - alert: HighErrorRate
           expr: |
             (
@@ -759,7 +759,7 @@ spec:
             summary: "Error rate above SLO threshold"
             description: "Error rate is {{ $value | humanizePercentage }}"
         
-        # Latency SLO: p95 < 500ms
+      
         - alert: HighLatency
           expr: |
             histogram_quantile(0.95,
@@ -772,7 +772,7 @@ spec:
             summary: "p95 latency above SLO threshold"
             description: "p95 latency is {{ $value }}s"
         
-        # Saturation: CPU/Memory
+      
         - alert: HighCPUUsage
           expr: |
             avg(
