@@ -1,0 +1,55 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: payment-slos
+  labels:
+    release: prometheus
+spec:
+  groups:
+    - name: availability
+      rules:
+        - alert: PaymentServiceDown
+          expr: sum(up{app="resilient-sadad-network"}) == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: Payment service is down
+            description: No targets up for app=resilient-sadad-network for 2 minutes.
+    - name: latency
+      rules:
+        - alert: HighLatencyP95
+          expr: |
+            histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{app="resilient-sadad-network",method!="OPTIONS"}[5m])) by (le)) > 0.3
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: 95th percentile latency over 300ms
+            description: P95 latency exceeded 300ms over 5m window.
+    - name: errors
+      rules:
+        - alert: HighErrorRate
+          expr: |
+            (sum(rate(http_server_requests_seconds_count{app="resilient-sadad-network",status!~"2.."}[5m]))
+             /
+             sum(rate(http_server_requests_seconds_count{app="resilient-sadad-network"}[5m]))) > 0.05
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: Error rate above 5%
+            description: HTTP non-2xx ratio exceeded 5% for 10 minutes.
+    - name: saturation
+      rules:
+        - alert: HPASaturated
+          expr: |
+            kube_hpa_status_current_replicas{horizontalpodautoscaler="payment-hpa"}
+            ==
+            kube_hpa_spec_max_replicas{horizontalpodautoscaler="payment-hpa"}
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: HPA at max replicas
+            description: Payment HPA is running at maximum replicas for 10 minutes. Consider scaling limits/capacity.

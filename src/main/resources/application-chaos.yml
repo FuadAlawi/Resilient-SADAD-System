@@ -1,0 +1,27 @@
+spring:
+  profiles: chaos
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,chaosmonkey
+
+management.endpoint.chaosmonkey.enabled: true
+
+chaos:
+  monkey:
+    enabled: true
+    watcher:
+      restController: true
+      service: true
+      repository: false
+      controller: true
+    assaults:
+      latencyActive: true
+      exceptionsActive: false
+      memoryActive: false
+      cpuActive: false
+      latencyRangeStart: 100
+      latencyRangeEnd: 500
+      level: 1

@@ -1,0 +1,13 @@
+name: pod-kill-scenario
+severity: medium
+steps:
+  - description: Kill one payment pod
+    action: pod-kill
+    parameters:
+      selector: app=resilient-sadad-network
+      mode: one
+  - description: Verify service remains available
+    action: http-check
+    parameters:
+      url: http://payment/api/v1/healthz
+      expect: 200

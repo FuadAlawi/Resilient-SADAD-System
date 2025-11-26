@@ -1,0 +1,13 @@
+name: ddos-eid-scenario
+severity: high
+steps:
+  - description: Ramp traffic 10x for 10 minutes (synthetic)
+    action: traffic-gen
+    parameters:
+      rps: 1000
+      duration: 600s
+  - description: Ensure HPA scales and latency stays < 300ms p95
+    action: assert-metrics
+    parameters:
+      metric: latency_p95_ms
+      threshold: 300

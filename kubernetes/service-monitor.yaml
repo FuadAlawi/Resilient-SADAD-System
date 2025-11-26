@@ -1,0 +1,29 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: payment-servicemonitor
+  labels:
+    release: prometheus
+spec:
+  jobLabel: app
+  selector:
+    matchLabels:
+      app: resilient-sadad-network
+  endpoints:
+    - port: http
+      path: /actuator/prometheus
+      interval: 30s
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment
+  labels:
+    app: resilient-sadad-network
+spec:
+  selector:
+    app: resilient-sadad-network
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080

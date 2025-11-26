@@ -1,0 +1,12 @@
+name: shamoon-disk-wipe-simulation
+severity: critical
+steps:
+  - description: Inject file system errors on one node (dry-run)
+    action: fs-error
+    parameters:
+      mode: dry-run
+  - description: Validate service health endpoint
+    action: http-check
+    parameters:
+      url: http://payment/api/v1/healthz
+      expect: 200

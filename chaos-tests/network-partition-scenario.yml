@@ -1,0 +1,17 @@
+name: network-partition-scenario
+severity: high
+steps:
+  - description: Partition payment pods from database/service dependencies (simulated)
+    action: net-partition
+    parameters:
+      selector: app=resilient-sadad-network
+      direction: egress
+      targets:
+        - rds
+        - redis
+      duration: 300s
+  - description: Validate degraded mode still returns health
+    action: http-check
+    parameters:
+      url: http://payment/api/v1/healthz
+      expect: 200

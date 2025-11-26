@@ -1,0 +1,19 @@
+name: az-outage-simulation
+severity: critical
+steps:
+  - description: Simulate AZ outage by draining nodes in one zone (dry-run)
+    action: node-drain
+    parameters:
+      topologyKey: topology.kubernetes.io/zone
+      value: ZONE_A
+      mode: dry-run
+  - description: Validate service remains available
+    action: http-check
+    parameters:
+      url: http://payment/api/v1/healthz
+      expect: 200
+  - description: Check minimum availability via PDB
+    action: assert-metrics
+    parameters:
+      metric: kube_poddisruptionbudget_status_current_healthy
+      threshold: 1
