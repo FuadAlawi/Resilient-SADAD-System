@@ -2,7 +2,7 @@
 
 A production-ready resilient payment processing service implementing the **EMAM Framework** for Saudi Arabia's critical infrastructure. Features chaos engineering, multi-AZ deployment, comprehensive monitoring, and disaster recovery procedures.
 
-## 🎯 Assignment Requirements
+
 
 This project fulfills the **Design Resilient National System** assignment with complete implementation of:
 
@@ -87,35 +87,6 @@ kubectl apply -f kubernetes/
 kubectl get pods -w
 ```
 
-## 📁 Project Structure
-
-```
-.
-├── chaos-tests/          # Chaos engineering scenarios
-│   ├── pod-kill-scenario.yml
-│   ├── network-partition-scenario.yml
-│   ├── az-outage-simulation.yml
-│   ├── ddos-eid-scenario.yml
-│   └── shamoon-simulation.yml
-├── docs/
-│   ├── EMAM-Resilient-SADAD.md    # Full EMAM framework report
-│   ├── EMAM-Resilient-SADAD.pdf   # PDF deliverable
-│   └── runbooks/
-│       └── recovery-procedures.md  # DR and incident response
-├── kubernetes/           # K8s manifests
-│   ├── deployment-tier1.yaml      # Multi-AZ deployment + PDB
-│   ├── hpa.yaml                    # Horizontal Pod Autoscaler
-│   ├── prometheus-rules.yaml      # SLO alerts
-│   └── service-monitor.yaml       # Metrics scraping
-├── src/                  # Spring Boot application
-├── terraform/            # Infrastructure as Code
-│   ├── main.tf          # VPC, EKS cluster
-│   ├── variables.tf     # Configuration
-│   └── outputs.tf       # Cluster endpoints
-└── scripts/
-    ├── build-pdf.sh     # Generate PDF report
-    └── chaos-monkey-demo.sh
-```
 
 ## 🔒 Security & Compliance
 
@@ -140,13 +111,9 @@ See [`docs/runbooks/recovery-procedures.md`](docs/runbooks/recovery-procedures.m
 3. Key Rotation (KMS and App Secrets)
 4. Runbook Drills Schedule
 
-## 📄 Documentation
 
-- **Full Report**: [`docs/EMAM-Resilient-SADAD.md`](docs/EMAM-Resilient-SADAD.md)
-- **PDF**: [`docs/EMAM-Resilient-SADAD.pdf`](docs/EMAM-Resilient-SADAD.pdf)
-- **Walkthrough**: [`docs/WALKTHROUGH.md`](docs/WALKTHROUGH.md)
 
-## 🌍 Vision 2030 Alignment
+##  Vision 2030 Alignment
 
 - Enable fintech ecosystem with high uptime
 - Support cashless society goals
@@ -177,6 +144,4 @@ kubectl get hpa
 
 MIT License. See [LICENSE](LICENSE) for details.
 
-## 👥 Author
 
-Created for the **Design Resilient National System** assignment.
