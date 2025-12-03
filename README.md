@@ -120,7 +120,7 @@ See [`docs/runbooks/recovery-procedures.md`](docs/runbooks/recovery-procedures.m
 - Data sovereignty and transparency
 - Ethical AI and automation
 
-## 📦 Deployment
+## Deployment
 
 ### Deploy to AWS
 ```bash
