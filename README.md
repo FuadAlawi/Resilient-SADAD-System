@@ -13,7 +13,7 @@ This project fulfills the **Design Resilient National System** assignment with c
 - ✅ **Terraform** infrastructure as code for AWS EKS
 - ✅ **Prometheus** monitoring with SLO-based alerting
 
-## 🏗️ Architecture
+## Architecture
 
 Multi-AZ deployment on AWS:
 - **VPC**: 3 Availability Zones with public/private subnets
@@ -21,7 +21,7 @@ Multi-AZ deployment on AWS:
 - **Application**: Spring Boot with Chaos Monkey, Prometheus metrics
 - **Resilience**: Pod anti-affinity, topology spread, HPA, PDB
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 - Java 17+
@@ -42,7 +42,7 @@ curl -s http://localhost:8080/api/v1/healthz
 mvn spring-boot:run -Dspring-boot.run.profiles=chaos
 ```
 
-## 🧪 Testing
+## Testing
 
 ### 1. Unit Tests
 
@@ -88,14 +88,14 @@ kubectl get pods -w
 ```
 
 
-## 🔒 Security & Compliance
+## Security & Compliance
 
 - **Data Residency**: Default region set to `me-central-1` (Bahrain)
 - **Islamic Principles**: Amanah (stewardship), Adl (fairness), No harm
 - **SAMA Compliance**: RTO ≤ 15 min, RPO ≤ 1 min
 - **Threat Modeling**: STRIDE analysis with Saudi context (Shamoon, state actors)
 
-## 📊 Monitoring
+## Monitoring
 
 Prometheus metrics and alerts included:
 - **Availability SLO**: 99.9% uptime
@@ -103,7 +103,7 @@ Prometheus metrics and alerts included:
 - **Error Rate**: < 0.1%
 - **Saturation**: CPU/Memory thresholds
 
-## 🚨 Recovery Procedures
+## Recovery Procedures
 
 See [`docs/runbooks/recovery-procedures.md`](docs/runbooks/recovery-procedures.md) for:
 1. Destructive Malware Containment (Shamoon-like)
@@ -140,8 +140,6 @@ kubectl get pods -l app=resilient-sadad-network
 kubectl get hpa
 ```
 
-## 📜 License
 
-MIT License. See [LICENSE](LICENSE) for details.
 
 
