@@ -105,7 +105,6 @@ Prometheus metrics and alerts included:
 
 ## Recovery Procedures
 
-See [`docs/runbooks/recovery-procedures.md`](docs/runbooks/recovery-procedures.md) for:
 1. Destructive Malware Containment (Shamoon-like)
 2. Regional DR Failover (Warm Standby)
 3. Key Rotation (KMS and App Secrets)
